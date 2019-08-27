@@ -1,0 +1,39 @@
+#
+#!/bin/bash
+unset S
+unset G
+unset B
+yum -y update
+mkdir /opt/src/$(date +"%Y-%m-%d")
+cd /opt/src/$(date +"%Y-%m-%d")
+LATEST=$(curl -s http://nginx.org/packages/mainline/centos/7/SRPMS/ | grep -Eo 'nginx-1.*.ngx.src.rpm' | sort -t. -k 1,1nr -k 2,2nr -k 3,3nr  | head -n 1 | sed 's/"//' | cut -f1 -d">")
+wget http://nginx.org/packages/mainline/centos/7/SRPMS/$LATEST
+rpm -ivh $LATEST
+git clone https://github.com/openssl/openssl.git
+cd openssl
+git checkout OpenSSL_1_1_1-stable
+S=$(readlink -f /opt/src/$(date +"%Y-%m-%d")/openssl)
+cd ..
+mkdir /opt/src/$(date +"%Y-%m-%d")/geoip2-$(date +"%Y-%m-%d")
+cd /opt/src/$(date +"%Y-%m-%d")/geoip2-$(date +"%Y-%m-%d")
+curl --silent "https://api.github.com/repos/leev/ngx_http_geoip2_module/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | xargs -I {} curl -sOL "https://github.com/leev/ngx_http_geoip2_module/archive/"{}'.zip'
+unzip -j *.zip -d ngx_http_geoip2_module
+G=$(readlink -f /opt/src/$(date +"%Y-%m-%d")/geoip2-$(date +"%Y-%m-%d")/ngx_http_geoip2_module)
+cd /opt/src/$(date +"%Y-%m-%d")
+git clone https://github.com/eustas/ngx_brotli.git
+cd /opt/src/$(date +"%Y-%m-%d")/ngx_brotli
+git submodule update --init
+B=$(readlink -f /opt/src/$(date +"%Y-%m-%d")/ngx_brotli)
+DATE=$(date +%Y.%m.%d)
+mkdir /home/lanka/nginx/$DATE
+export S
+export G
+export B
+sed -i 's/--with-http_ssl_module/--with-http_ssl_module --with-openssl=$S --with-openssl-opt=enable-tls1_3 --add-module=$G --add-module=$B /g' /home/lanka/rpmbuild/SPECS/nginx.spec
+rpmbuild -ba /home/lanka/rpmbuild/SPECS/nginx.spec
+rsync -a /home/lanka/rpmbuild/RPMS/x86_64/nginx-1.*.rpm /home/lanka/nginx/$DATE/
+rm -rf /home/lanka/rpmbuild/RPMKS/x86_64/*
+rm -rf /home/lanka/rpmbuild/BUILD/*
+rm -rf /home/lanka/rpmbuild/SOURCES/*
+rm -rf /home/lanka/rpmbuild/SPECS/*
+rm -rf /home/lanka/rpmbuild/SRPMS/*
