@@ -1,0 +1,43 @@
+#
+#!/bin/bash
+rm -rf /usr/local/src/*
+unset NGX
+unset NGX2
+unset COM
+unset S
+unset G
+unset B
+apt update && apt upgrade -y
+mkdir /usr/local/src/$(date +"%Y-%m-%d")
+cd /usr/local/src/$(date +"%Y-%m-%d")
+apt-get build-dep nginx -y
+apt-get source nginx
+NGX=$(find /usr/local/src/ -name "rules")
+git clone https://github.com/openssl/openssl.git
+cd openssl
+git checkout OpenSSL_1_1_1-stable
+S=$(readlink -f /usr/local/src/$(date +"%Y-%m-%d")/openssl)
+mkdir /usr/local/src/geoip2-$(date +"%Y-%m-%d")
+cd /usr/local/src/geoip2-$(date +"%Y-%m-%d")
+curl --silent "https://api.github.com/repos/leev/ngx_http_geoip2_module/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | xargs -I {} curl -sOL "https://github.com/leev/ngx_http_geoip2_module/archive/"{}'.zip'
+unzip -j *.zip -d latest
+G=$(readlink -f /usr/local/src/geoip2-$(date +"%Y-%m-%d")/latest)
+cd /usr/local/src/$(date +"%Y-%m-%d")
+git clone https://github.com/eustas/ngx_brotli.git
+cd /usr/local/src/$(date +"%Y-%m-%d")/ngx_brotli
+git submodule update --init
+B=$(readlink -f /usr/local/src/$(date +"%Y-%m-%d")/ngx_brotli)
+DATE=$(date +%Y.%m.%d)
+mkdir /builds/nginx/$DATE
+export S
+export G
+export B
+sed -i 's/.\/configure --prefix=\/etc\/nginx/.\/configure --with-openssl=$S --add-module=$G --add-module=$B --prefix=\/etc\/nginx /g' $NGX
+sed -i 's/dh_shlibdeps -a/dh_shlibdeps -a --dpkg-shlibdeps-params=--ignore-missing-info/g' $NGX
+COM=$(find /usr/local/src/$(date +"%Y-%m-%d")/nginx*/auto -name "gcc")
+sed -i 's/CFLAGS="$CFLAGS -Werror"/#CFLAGS="$CFLAGS -Werror"/g' $COM
+NGX2=$(echo "$(dirname -- "$NGX")")
+cd $NGX2
+cd ..
+apt build-dep nginx -y && dpkg-buildpackage -uc -b
+rsync -a /usr/local/src/$(date +"%Y-%m-%d")/nginx_*_amd64.deb /builds/nginx/$DATE/
